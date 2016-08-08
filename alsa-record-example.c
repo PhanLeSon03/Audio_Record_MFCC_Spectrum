@@ -14,10 +14,18 @@
   gcc -o alsa-record-example -lasound alsa-record-example.c && ./alsa-record-example hw:0
 */
 
+/*
+ Phan Le Son
+ plson03@gmail.com 
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <alsa/asoundlib.h>
 #include <stdint.h>
+#include "libmfcc.h"
+
+#define N 1024
 
 typedef struct
 {
@@ -34,6 +42,12 @@ typedef struct
     uint16_t bits_per_sample;
 } WaveHeader;
 
+complex V[2*NUMBINHALF];
+
+extern float FilterBank[NUMFILTERBANK][NUMBINHALF];
+extern float fNorm[NUMFILTERBANK];
+float Re[NUMBINHALF*2], Im[NUMBINHALF*2];
+
 
 
 WaveHeader *genericWAVHeader(uint32_t sample_rate, uint16_t bit_depth, uint16_t channels);
@@ -42,20 +56,43 @@ int writeWAVHeader(FILE *fd, WaveHeader *hdr);
 	      
 main (int argc, char *argv[])
 {
+  // Holds the spectrum data to be analyzed
+  float spectrum[NUMBINHALF];
+  float mfcc_result[NUMFILTERBANK];
+  
   int i;
   int err;
   char *buffer;
   char *buffer_mic1;
-  int buffer_frames = 1024;
+  int buffer_frames = N;
   unsigned int rate = 16000;
   char Channel = 8;
   snd_pcm_t *capture_handle;
   snd_pcm_hw_params_t *hw_params;
   snd_pcm_format_t format = SND_PCM_FORMAT_S16_LE;
-
+  // Determine which MFCC coefficient to compute
+  unsigned int idxCoeff;
   WaveHeader *fileAudio;
+
+  PreCalcFilterBank(FilterBank,fNorm, NUMBINHALF, NUMFILTERBANK);
+
+  	  /*
+      printf("FilterBank:");
+  
+      for(idxCoeff = 0; idxCoeff < NUMFILTERBANK; idxCoeff++)
+	  {
+          for (i=0; i< NUMBINHALF; i++) 	      
+	          printf(" %f ", FilterBank[idxCoeff][i]);
+	  }
+      printf("\n");
+      */
   char fileOut[] = "record.wav";
   FILE *out = fopen(fileOut,"wb");
+
+
+
+  // Holds the value of the computed coefficient
+  
 
   fileAudio = genericWAVHeader(16000, 16, 1);
 
@@ -155,15 +192,33 @@ main (int argc, char *argv[])
       }
       fprintf(stdout, "read %d done\n", i);
       uint16_t iSample;
+      short temp;
       for (iSample=0; iSample < 2*buffer_frames*Channel; iSample++)
       {
           if (iSample%(2*Channel)==0)
           {  
               buffer_mic1[iSample/(Channel)]=buffer[iSample];
-              buffer_mic1[iSample/(Channel)+1]=buffer[iSample+1];       
+              buffer_mic1[iSample/(Channel)+1]=buffer[iSample+1];  
+              temp = (short)(buffer[iSample+1]| (buffer[iSample]<<8));
+              V[iSample/(2*Channel)].Re = (float)(temp)/32768.0; 
+              V[iSample/(2*Channel)].Im = (float)0.0f; 
+              //Re[iSample/(Channel*2)] = (float)(buffer[iSample+1]| (buffer[iSample]<<8)); 
+              //Im[iSample/(Channel*2)] = 0.0f;
           }
       }
+      
       fwrite(buffer_mic1,1,2*buffer_frames,out);
+      
+      
+      MFCC(V, FilterBank ,fNorm, mfcc_result);
+	  
+      printf("MFCC:");
+      for(idxCoeff = 0; idxCoeff < NUMFILTERBANK; idxCoeff++)
+	  {	      
+	      printf(" %f ", mfcc_result[idxCoeff]);
+	  }
+      printf("\n");
+      
   }
 
   free(buffer);
