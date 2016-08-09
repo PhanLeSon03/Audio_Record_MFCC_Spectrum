@@ -23,6 +23,7 @@ typedef float real;
 #define PI 3.14159265358979323846264338327
 #define NUMFILTERBANK 64
 #define NUMBINHALF    512 
+#define FS            16000
 
 // Returns the specified (mth) MFCC
 float GetCoefficient(float* spectralData, unsigned int samplingRate, unsigned int NumFilters, unsigned int binSize, unsigned int m);

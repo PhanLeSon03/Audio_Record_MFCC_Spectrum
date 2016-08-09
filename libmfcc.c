@@ -170,7 +170,7 @@ float GetCenterFrequency(unsigned int filterBand)
 	float centerFrequency = 0.0f;
 	float exponent;
     float tmp;
-#if 1
+#if 0
 	if(filterBand == 0)
 	{
 		centerFrequency = 0;
@@ -185,15 +185,25 @@ float GetCenterFrequency(unsigned int filterBand)
 		centerFrequency = pow(1.0711703, exponent);
 		centerFrequency *= 1073.4;
 	}
-#else
+#else /* http://practicalcryptography.com/miscellaneous/machine-learning/guide-mel-frequency-cepstral-coefficients-mfccs/ */
+    float Mel_Max, Mel_Val=0;
+    
     if(filterBand == 0)
 	{
 		centerFrequency = 0;
 	}
-    else  /* 700(e^(m/1125)-1) */
+    else  
     {
-        tmp = (float)(filterBand/1125.0f);
+        
+        /* 1125*ln(1+f/700) */
+        tmp = (float)(FS/(2.0*700.0)) + 1.0; 
+        Mel_Max = (float)(1125.0*log(tmp));
+        //printf("Mel(8000hz): %f ", Mel_Max);
 
+        /* Mel value */
+        Mel_Val = filterBand*Mel_Max/(NUMFILTERBANK+1);
+        /* 700(e^(m/1125)-1) */ 
+        tmp = (float)(Mel_Val/1125.0f);
         centerFrequency = 700*(exp(tmp)-1);                
     }
     
