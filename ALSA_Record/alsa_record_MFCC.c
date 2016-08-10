@@ -1,31 +1,32 @@
 /* 
-  A Minimal Capture Program
+  
+  Phan Le Son
+  plson03@gmail.com 
 
-  This program opens an audio interface for capture, configures it for
-  stereo, 16 bit, 44.1kHz, interleaved conventional read/write
-  access. Then its reads a chunk of random data from it, and exits. It
-  isn't meant to be a real program.
+  This program opens a Microphone array with 8 channels
+  Capture on Channel 0 (single Microphone on Microphone array)
+  Format: mono, 16 bit, 16KhzkHz
+  Storeaged on record.wav
+  Do MFCC for the CHUNK 1024 samples
+  Generate the spectrogram of MFCCs
 
-  From on Paul David's tutorial : http://equalarea.com/paul/alsa-audio.html
-
-  Fixes rate and buffer problems
+  Modifued from : Paul David's tutorial : http://equalarea.com/paul/alsa-audio.html
 
   sudo apt-get install libasound2-dev
-  gcc -o alsa-record-example -lasound alsa-record-example.c && ./alsa-record-example hw:0
+  gcc -o alsa_record_MFCC alsa_record_MFCC.c libmfcc.c bmp.c -lasound -lm
+  ./alsa_record_MFCC hw:2,0    #card 2nd, index 0: 
 */
 
-/*
- Phan Le Son
- plson03@gmail.com 
- */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <alsa/asoundlib.h>
 #include <stdint.h>
 #include "libmfcc.h"
+#include "bmp.h"
 
 #define N 1024
+#define T 64
 
 typedef struct
 {
@@ -41,6 +42,8 @@ typedef struct
     uint16_t bytes_per_frame;
     uint16_t bits_per_sample;
 } WaveHeader;
+
+
 
 complex V[2*NUMBINHALF];
 
@@ -59,13 +62,16 @@ main (int argc, char *argv[])
   // Holds the spectrum data to be analyzed
   float spectrum[NUMBINHALF];
   float mfcc_result[NUMFILTERBANK];
-  
+  RGB_data BMP[NUMFILTERBANK][T];
+ 
+  float Min=0.0f,Max=0.0f;
+  int Val_RGB;
   int i;
   int err;
   char *buffer;
   char *buffer_mic1;
-  int buffer_frames = N;
-  unsigned int rate = 16000;
+  int buffer_frames = NUMBINHALF*2 ;
+  unsigned int rate = FS;
   char Channel = 8;
   snd_pcm_t *capture_handle;
   snd_pcm_hw_params_t *hw_params;
@@ -73,6 +79,9 @@ main (int argc, char *argv[])
   // Determine which MFCC coefficient to compute
   unsigned int idxCoeff;
   WaveHeader *fileAudio;
+
+
+  memset(BMP, 0.0, sizeof(BMP));
 
   PreCalcFilterBank(FilterBank,fNorm, NUMBINHALF, NUMFILTERBANK);
 
@@ -94,9 +103,9 @@ main (int argc, char *argv[])
   // Holds the value of the computed coefficient
   
 
-  fileAudio = genericWAVHeader(16000, 16, 1);
+  fileAudio = genericWAVHeader(FS, 16, 1);
 
-  uint32_t pcm_data_size = 1024*2*100;
+  uint32_t pcm_data_size = 1024*2*T;
   fileAudio->file_size = pcm_data_size +36;
   writeWAVHeader(out,fileAudio); 
  
@@ -182,7 +191,7 @@ main (int argc, char *argv[])
   buffer_mic1 = malloc(buffer_frames * snd_pcm_format_width(format) / 8);
   fprintf(stdout, "buffer allocated\n");
 
-  for (i = 0; i < 100; ++i) 
+  for (i = 0; i < T; i++) 
   {
       if ((err = snd_pcm_readi (capture_handle, buffer, buffer_frames)) != buffer_frames) 
       {
@@ -200,8 +209,10 @@ main (int argc, char *argv[])
               buffer_mic1[iSample/(Channel)]=buffer[iSample];
               buffer_mic1[iSample/(Channel)+1]=buffer[iSample+1];  
               temp = (short)(buffer[iSample+1]| (buffer[iSample]<<8));
-              V[iSample/(2*Channel)].Re = (float)(temp)/32768.0; 
-              V[iSample/(2*Channel)].Im = (float)0.0f; 
+              V[iSample/(2*Channel)].Re = (float)(temp/32768.0); 
+              V[iSample/(2*Channel)].Im = (float)0.0f;
+              //V[iSample/(2*Channel)].Re = (float)cos(2*PI*1000*iSample/(2*Channel)/FS);//(float)cos(2*PI*1000*iSample/(2*Channel)/FS);//+ 
+              //V[iSample/(2*Channel)].Im = (float)0.0f; 
               //Re[iSample/(Channel*2)] = (float)(buffer[iSample+1]| (buffer[iSample]<<8)); 
               //Im[iSample/(Channel*2)] = 0.0f;
           }
@@ -213,14 +224,28 @@ main (int argc, char *argv[])
       MFCC(V, FilterBank ,fNorm, mfcc_result);
 	  
       printf("MFCC:");
-      for(idxCoeff = 0; idxCoeff < NUMFILTERBANK; idxCoeff++)
-	  {	      
-	      printf(" %f ", mfcc_result[idxCoeff]);
+      for(idxCoeff = 2; idxCoeff < NUMFILTERBANK; idxCoeff++)
+	  {	     
+	      //printf(" %f ", mfcc_result[idxCoeff]);
+          Val_RGB = (int)(50*(mfcc_result[idxCoeff]+1.5));
+          if (Val_RGB < 0)  Val_RGB = 0;
+           
+          BMP[idxCoeff][i].g =  (BYTE)(Val_RGB );
+          BMP[idxCoeff][i].b =  (BYTE)(Val_RGB);
+          BMP[idxCoeff][i].r =  (BYTE)(Val_RGB ); 
+          //BMP[idxCoeff][i].g = (BYTE)((Val_RGB & 0x00FF00)>>8);
+          //BMP[idxCoeff][i].b = (BYTE)((Val_RGB & 0xFF0000)>>16); 
+          printf(" %d  ", Val_RGB); 
+          if (mfcc_result[idxCoeff] < Min) Min=mfcc_result[idxCoeff];
+          if (mfcc_result[idxCoeff] > Max) Max=mfcc_result[idxCoeff];  
 	  }
       printf("\n");
       
+      
   }
+  printf("Min: %f  Max: %f \n", Min, Max);
 
+  
   free(buffer);
   free(buffer_mic1);
  
@@ -229,11 +254,9 @@ main (int argc, char *argv[])
 	
   snd_pcm_close (capture_handle);
   fprintf(stdout, "audio interface closed\n");
-  /////////////////////////////////////////////////////////////////
 
   
-  //recordWAV(fileOut, fileAudio, 1);
-  
+  bmp_generator("./record.bmp",T, NUMFILTERBANK , (BYTE*)BMP); 
   exit (0);
 }
 
@@ -276,19 +299,7 @@ int writeWAVHeader(FILE *fd, WaveHeader *hdr)
     fwrite(&hdr->bits_per_sample, 1, 2, fd);
     fwrite("data", 1,  4, fd);
     fwrite(&hdr->file_size, 1, 4, fd);
-    //fwrite(&hdr->file_size-36, 1, 4, fd);
-    //int count;
-    //char * Dummy;
-    //for (count = 44; count < 512; count++)
-    //{
-    //   *Dummy = 0x80;
-    //   fwrite(Dummy, 1, 1, fd);
-    //}
-
     return 0;
 }
-
-
-
 
 

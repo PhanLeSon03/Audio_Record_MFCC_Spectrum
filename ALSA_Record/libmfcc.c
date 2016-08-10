@@ -170,7 +170,7 @@ float GetCenterFrequency(unsigned int filterBand)
 	float centerFrequency = 0.0f;
 	float exponent;
     float tmp;
-#if 0
+#if 1
 	if(filterBand == 0)
 	{
 		centerFrequency = 0;
@@ -221,7 +221,7 @@ void PreCalcFilterBank(float Array[NUMFILTERBANK][NUMBINHALF], float fNorm[NUMFI
     {
         for (j=0; j<numBin; j++)
         {
-            Array[i][j]= GetFilterParameter(16000,2*numBin, j, i+1);     //2*512
+            Array[i][j]= GetFilterParameter(FS,2*numBin, j, i+1);     //2*512
             //printf(" %f ",Array[i][j]);
         }
     
@@ -234,6 +234,7 @@ void PreCalcFilterBank(float Array[NUMFILTERBANK][NUMBINHALF], float fNorm[NUMFI
    Inputs: 
        + *Sample                       : samples in time domain
        + Filter[NUMFILTERBANK][NUMBINHALF]: FilterBank
+       
        Note: Macro "NUMFILTERBANK": number of filter bank, e.x. NUMFILTERBANK=64
              Macro "NUMBINHALF": half of number of bin frequency    
    Output:
@@ -263,7 +264,12 @@ void MFCC(complex *Sample, float Filter[NUMFILTERBANK][NUMBINHALF],float *fNorm,
     //}
     /* Get Magnitude of FFT bin */
     abs_complex(Sample,spectrum,NUMBINHALF);
-    //for (i=0; i < 10; i++)
+
+    //for (i=20; i < 30; i++)
+    //{
+    //    printf("%5.2f  \n", spectrum[i]);
+    //}
+    //for (i=50; i < 70; i++)
     //{
     //    printf("%5.2f  \n", spectrum[i]);
     //}
@@ -315,6 +321,7 @@ void GetMFCC(float* spectralData,float Filter[NUMFILTERBANK][NUMBINHALF],float *
 	    }        
         
         out[m] *= outerSum;
+        //out[m] = LogEnergy[m];
 
         //printf("%5.2f  \n", result[m]); 
     } 
@@ -415,7 +422,7 @@ void abs_complex(complex * In, float *Out, int Size)
     int i;
     for (i=0; i < Size; i++)
     {
-        Out[i] = sqrt(In[i].Re*In[i].Re +In[i].Im*In[i].Im)/Size;    
+        Out[i] = sqrt(In[i].Re*In[i].Re +In[i].Im*In[i].Im)/(2*Size);    
     }
 }
 
