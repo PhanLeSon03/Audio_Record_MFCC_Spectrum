@@ -18,6 +18,7 @@
 float FilterBank[NUMFILTERBANK][NUMBINHALF];
 float fNorm[NUMFILTERBANK];
 float result[NUMFILTERBANK];
+float FIRCoef[2*NUMBINHALF];
 complex tmpBuff[2*NUMBINHALF];
 
 /* 
@@ -90,7 +91,7 @@ float GetCoefficient(float* spectralData, unsigned int samplingRate, unsigned in
 float NormalizationFactor(int NumFilters, int m)
 {
 	float normalizationFactor = 0.0f;
-
+    
 	if(m == 0)
 	{
 		normalizationFactor = sqrt(1.0f / NumFilters);
@@ -99,8 +100,25 @@ float NormalizationFactor(int NumFilters, int m)
 	{
 		normalizationFactor = sqrt(2.0f / NumFilters);
 	}
-	
+    
 	return normalizationFactor;
+}
+
+/* Energy factors*/
+void EnergyFac(float FilterBank[NUMFILTERBANK][NUMBINHALF], float fEnergyFac[NUMFILTERBANK])
+{
+    int i,j;
+    for (i=0; i < NUMFILTERBANK; i++)
+    {
+        fEnergyFac[i] = 0.0;
+        for (j=0; j < NUMBINHALF; j++) 
+        {
+            fEnergyFac[i] += FilterBank[i][j]*FilterBank[i][j];   
+        }
+        
+        fEnergyFac[i] = 1.0/fEnergyFac[i];
+    }
+
 }
 
 /* 
@@ -151,8 +169,8 @@ float GetMagnitudeFactor(unsigned int filterBand)
 	{
 		magnitudeFactor = 0.015;
 	}
-	else if(filterBand >= 15 && filterBand <= 48) //48////////////////////////////////////////////////////////////////////////////
-	{
+	else if(filterBand >= 15 && filterBand <= NUMFILTERBANK) // 48
+    {
 		magnitudeFactor = 2.0f / (GetCenterFrequency(filterBand + 1) - GetCenterFrequency(filterBand -1));
 	}
 
@@ -217,6 +235,8 @@ float GetCenterFrequency(unsigned int filterBand)
 void PreCalcFilterBank(float Array[NUMFILTERBANK][NUMBINHALF], float fNorm[NUMFILTERBANK], int numBin, int numBank)
 {
     int i,j;
+
+    Window(FIRCoef);
     for(i=0; i< numBank; i++)
     {
         for (j=0; j<numBin; j++)
@@ -226,6 +246,7 @@ void PreCalcFilterBank(float Array[NUMFILTERBANK][NUMBINHALF], float fNorm[NUMFI
         }
     
         fNorm[i] = NormalizationFactor(NUMFILTERBANK, i);   
+        //EnergyFac(Array, fNorm );
         //printf(" %f ",fNorm[i]); 
     }    
 }
@@ -249,9 +270,17 @@ void MFCC(complex *Sample, float Filter[NUMFILTERBANK][NUMBINHALF],float *fNorm,
     float spectrum[NUMBINHALF];
 
     int i;
-   
+
+    /* Preemphasis filter*/
+    Preemphasis(Sample);
+    
     //tmpBuff = (complex *)malloc(sizeof(complex)*2*NUMBINHALF);
 
+    /* Hanning Window */
+    for (i=0; i < 2*NUMBINHALF; i++)
+    {
+         Sample[i].Re = FIRCoef[i]*Sample[i].Re; 
+    }
     /* FFT calculation for input samples */
     fft( Sample, 2*NUMBINHALF, tmpBuff);
 
@@ -276,14 +305,14 @@ void MFCC(complex *Sample, float Filter[NUMFILTERBANK][NUMBINHALF],float *fNorm,
     // Compute coefficients
     GetMFCC(spectrum, Filter,fNorm, Mel); 
   
-
+    lifter(Mel,NUMFILTERBANK); 
     //free(tmpBuff); 
 }
 
 
 void GetMFCC(float* spectralData,float Filter[NUMFILTERBANK][NUMBINHALF],float *fNorm, float *out)
 {
-    float LogEnergy[NUMFILTERBANK];
+    float LogEnergy[NUMFILTERBANK];    
 	float outerSum = 0.0f;
 	float innerSum = 0.0f;
 	unsigned int k, l, m;
@@ -299,11 +328,11 @@ void GetMFCC(float* spectralData,float Filter[NUMFILTERBANK][NUMBINHALF],float *
 			LogEnergy[l] += fabs(spectralData[k] *  Filter[l][k]);
 		}
 
+        
 		if(LogEnergy[l] > 0.0f)
 		{
 			LogEnergy[l] = log(LogEnergy[l]); // The log of 0 is undefined, so don't use it
 		}
-
          
     }
 
@@ -416,13 +445,28 @@ void ifft( complex *v, int n, complex *tmp )
   return;
 }
 
+void lifter(float * Cepstra, unsigned char Len)
+{
+    int i=0;
+    float Lift;
+    /* L =22 */ 
+    /* Lift = 1 + (L/2)*sin(PI*n/L) */
+    for (i=0; i < Len; i++)
+    {
+        Lift = 1.0f + 32*sin(PI*i/64.0);
+        Cepstra[i] = Lift*Cepstra[i];
+    
+    } 
+    
+
+}
 
 void abs_complex(complex * In, float *Out, int Size)
 {
     int i;
     for (i=0; i < Size; i++)
-    {
-        Out[i] = sqrt(In[i].Re*In[i].Re +In[i].Im*In[i].Im)/(2*Size);    
+    {        
+        Out[i] = sqrt(In[i].Re*In[i].Re +In[i].Im*In[i].Im)/(2*Size);            
     }
 }
 
@@ -509,4 +553,44 @@ short _FFT(short int dir,long m,float *x,float *y)
    
    return 1;
 }
+
+/* Hanning window */
+void Window (float *FIRCoef)
+{
+    int i;
+    for(i=0;i<NUMBINHALF*2;i++)
+    {
+        FIRCoef[i] = (float) NUMBINHALF*2.0f;
+        FIRCoef[i] *= 0.5f*(
+                            1.0f - cos((2.0f*PI*i)/((float)NUMBINHALF*2.0f -1.0f))
+                           );  
+    }
+}
+
+
+void Preemphasis(complex *Data)
+{
+    int i;
+    float fCoef = 0.95f;
+    for(i=1; i < 2*NUMBINHALF ; i++)
+    {
+        Data[i].Re = Data[i].Re -0.95f*Data[i-1].Re; 
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

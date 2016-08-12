@@ -21,7 +21,7 @@ typedef struct
 typedef float real;
 
 #define PI 3.14159265358979323846264338327
-#define NUMFILTERBANK 32
+#define NUMFILTERBANK 64
 #define NUMBINHALF    512 
 #define FS            16000
 
@@ -52,10 +52,20 @@ void MFCC(complex *Sample, float Filter[NUMFILTERBANK][NUMBINHALF],float *fNorm,
 
 void GetMFCC(float* spectralData,float Filter[NUMFILTERBANK][NUMBINHALF],float *fNorm, float *out);
 
+void EnergyFac(float FilterBank[NUMFILTERBANK][NUMBINHALF], float fEnergyFac[NUMFILTERBANK]);
+
 void fft( complex *v, int n, complex *tmp );
 
 void ifft( complex *v, int n, complex *tmp );
 
 void abs_complex(complex * In, float *Out, int Size);
 
+void lifter(float * Cepstra, unsigned char Len);
+
 short _FFT(short int dir,long m,float *x,float *y);
+
+/* Hanning window */
+void Window (float *FIRCoef);
+
+void Preemphasis(complex *Data);
+

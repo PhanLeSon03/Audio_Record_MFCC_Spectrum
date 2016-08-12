@@ -46,4 +46,4 @@ typedef struct
 } RGB_data; // RGB TYPE, plz also make sure the order
 
 int bmp_generator(char *filename, int width, int height, unsigned char *data);
-
+void bmpread(char *file_name);
