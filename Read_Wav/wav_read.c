@@ -1,5 +1,4 @@
-
-
+//#include <magick/api.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <alsa/asoundlib.h>
@@ -18,6 +17,12 @@ extern float fNorm[NUMFILTERBANK];
 
 main()
 {
+    //Image *image = (Image *)NULL;
+    //ImageInfo *imageInfo;
+    //ExceptionInfo exception;
+    char infile[14] = "record_21";
+    char outfile[18] = "record_magick.bmp";
+ 
     float mfcc_result[NUMFILTERBANK];
     RGB_data BMP[NUMFILTERBANK-1][2*T];
     float Min=0.0f,Max=0.0f;
@@ -27,6 +32,21 @@ main()
     int32_t Val_RGB;
     uint32_t idxCoeff;
     int tmp;
+
+
+    //InitializeMagick(NULL);
+    //imageInfo = CloneImageInfo(0);
+    //GetExceptionInfo(&exception);
+
+    //strcpy(imageInfo->filename,infile);
+    //image = ReadImage(imageInfo,&exception);
+
+    //strcpy(imageInfo->filename, outfile);
+    //WriteImage(imageInfo,image);
+
+    //DestroyImage(image);
+    //DestroyImageInfo(imageInfo);
+    //DestroyMagick();
 
     memset(BMP, 0, sizeof(BMP));
     PreCalcFilterBank(FilterBank,fNorm, NUMBINHALF, NUMFILTERBANK);
@@ -46,16 +66,22 @@ main()
     {
        for (j=0; j< 2*NUMBINHALF;j++)
        {
-           V[j].Re = (float)(samples[i*NUMBINHALF + j]/32768.0); 
+           V[j].Re = (float)((
+                              samples[i*NUMBINHALF + j]
+                              //(samples[i*NUMBINHALF + j]>>8) |
+                              // (samples[i*NUMBINHALF + j]<<8) 
+                              )  
+                              /32768.0
+                            ); 
            V[j].Im = (float)0.0f;
        } 
        MFCC(V, FilterBank ,fNorm, mfcc_result);
 
-       printf("MFCC:");
-       for(idxCoeff = 1; idxCoeff < NUMFILTERBANK; idxCoeff++)
+       //printf("MFCC:");
+       for(idxCoeff = 3; idxCoeff < NUMFILTERBANK; idxCoeff++)
        {	     
-           //printf(" %f ", mfcc_result[idxCoeff]);
-           Val_RGB = (int)(255/(63.164356+46.877232)*(mfcc_result[idxCoeff]+10));
+           printf(" %f ", mfcc_result[idxCoeff]);
+           Val_RGB = (int)(255/(63.164356 +46.877232)*(mfcc_result[idxCoeff]+46.877232 ));
            //Val_RGB = tmp*tmp;
            //Val_RGB = Val_RGB/255;
            if (Val_RGB < 0)  Val_RGB = 0;
@@ -66,7 +92,7 @@ main()
            BMP[NUMFILTERBANK - idxCoeff-1][i].r =  (BYTE)(Val_RGB); 
            //BMP[NUMFILTERBANK - idxCoeff-1][i].b = (BYTE)((Val_RGB & 0x00FF00)>>8);
            //BMP[NUMFILTERBANK - idxCoeff-1][i].r = (BYTE)((Val_RGB & 0xFF0000)>>16); 
-           printf(" %d  ", Val_RGB); 
+           //printf(" %d  ", Val_RGB); 
            if (mfcc_result[idxCoeff] < Min) Min=mfcc_result[idxCoeff];
            if (mfcc_result[idxCoeff] > Max) Max=mfcc_result[idxCoeff];  
        }
@@ -75,7 +101,7 @@ main()
 
     printf("Min: %f  Max: %f \n", Min, Max);
 
-    bmp_generator("./record_2.bmp",2*T-1, NUMFILTERBANK -1 ,(BYTE*) BMP); 
+    bmp_generator("./record_2.bmp",2*T, NUMFILTERBANK -1 ,(BYTE*) BMP); 
 
     //bmpread("record_21.bmp");
 

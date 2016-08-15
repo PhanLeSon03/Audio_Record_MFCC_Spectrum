@@ -58,7 +58,7 @@ void fft( complex *v, int n, complex *tmp );
 
 void ifft( complex *v, int n, complex *tmp );
 
-void abs_complex(complex * In, float *Out, int Size);
+float abs_complex(complex * In, float *Out, int Size);
 
 void lifter(float * Cepstra, unsigned char Len);
 

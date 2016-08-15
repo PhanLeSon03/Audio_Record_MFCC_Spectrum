@@ -273,7 +273,7 @@ void MFCC(complex *Sample, float Filter[NUMFILTERBANK][NUMBINHALF],float *fNorm,
 
 
     /* Preemphasis filter*/
-    Preemphasis(Sample);
+    //Preemphasis(Sample);
     
     //tmpBuff = (complex *)malloc(sizeof(complex)*2*NUMBINHALF);
 

@@ -52,10 +52,20 @@ void MFCC(complex *Sample, float Filter[NUMFILTERBANK][NUMBINHALF],float *fNorm,
 
 void GetMFCC(float* spectralData,float Filter[NUMFILTERBANK][NUMBINHALF],float *fNorm, float *out);
 
+void EnergyFac(float FilterBank[NUMFILTERBANK][NUMBINHALF], float fEnergyFac[NUMFILTERBANK]);
+
 void fft( complex *v, int n, complex *tmp );
 
 void ifft( complex *v, int n, complex *tmp );
 
 void abs_complex(complex * In, float *Out, int Size);
 
+void lifter(float * Cepstra, unsigned char Len);
+
 short _FFT(short int dir,long m,float *x,float *y);
+
+/* Hanning window */
+void Window (float *FIRCoef);
+
+void Preemphasis(complex *Data);
+
