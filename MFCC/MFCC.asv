@@ -1,0 +1,63 @@
+function Out = MFCC(Sample, FilterBank, fNorm, FIRCoef)
+  %In = Preemphasis(Sample);
+  In = Sample;
+  In = In.*FIRCoef;
+  In_fft = fft(In);
+  In_fft_abs = abs(In_fft);
+  spectrum = GetMFCC(In_fft_abs, FilterBank, fNorm ); 
+  Out = spectrum;
+  %Out = lifter(spectrum); 
+  
+end
+
+%%
+function Out= Preemphasis(In)
+    Out = zeros(length(In),1);
+    Out(1) = In(1);
+    Out(2:end) = In(2:end) - 0.95*In(1:end-1);
+end
+
+%%
+
+function Out = GetMFCC(Fft_abs, FilterBank, fNorm )
+    shape = size(FilterBank);
+    logEnergy = zeros(shape(1),1);
+    Out = zeros(shape(1),1);
+    ath_max = 7.3989e-10;
+    pw = Fft_abs(1:length(Fft_abs)/2,1).^2;
+    pth=max(pw)*1E-20;
+    ath=sqrt(pth);
+    
+    if (ath > ath_max ) 
+        ath_max = ath
+    end
+    
+%    logEnergy = log(max(FilterBank*Fft_abs(1:length(Fft_abs)/2,1),1e-3));
+    for i=1:shape(1)
+        logEnergy(i) = sum(Fft_abs(1:length(Fft_abs)/2,1).*FilterBank(i,:)');
+        logEnergy(i) = max(logEnergy(i),1e-3);
+        logEnergy(i) = log(logEnergy(i)); 
+        
+    end
+
+    %Discrete Cosine Transform
+    for m=1:shape(1)
+        outerSum = 0;
+        for l=1:shape(1)
+           innerSum = logEnergy(l)*cos(((m*pi)/shape(1))*(l-0.5));
+           outerSum = outerSum + innerSum;
+        end
+        Out(m) = fNorm(m)*outerSum;
+    end
+%    Out = fNorm.*dct(logEnergy);
+ end
+
+%%
+function Out = lifter(In)
+    len = size(In);
+    i = (0:1:len(1)-1)';
+    Lift = 1 + 32*sin(pi*i/64);
+    Out = Lift.*In;
+end
+%%
+

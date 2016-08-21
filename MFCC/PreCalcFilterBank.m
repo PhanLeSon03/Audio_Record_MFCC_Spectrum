@@ -1,0 +1,85 @@
+function [FilterBank, fNorm, FIRCoef, Mel_Fre] = PreCalcFilterBank(N_2, N_BANK, FS)
+    FIRCoef = hanning(2*N_2);
+    FilterBank = zeros(N_BANK-1,N_2);
+    fNorm = zeros(N_BANK-1,1);
+    Mel_Fre = zeros(N_BANK+1,1);
+    
+    Mel_Fre(1) = 0;
+    for iBank = 2: N_BANK+1
+       Mel_Fre(iBank) =  GetCenterFrequency(iBank,FS, N_BANK+1);
+    end
+    
+    for i=1:N_BANK-1 % number of Triangle bank
+       for j = 1:N_2
+           currVal = (j-1)*FS/(2*N_2);    % k*Fs/N
+           FilterBank(i,j) = GetFilterParameter(currVal, i, Mel_Fre);
+       end
+       
+       fNorm(i) = NormalizationFactor(N_BANK,i);
+    end
+
+end
+
+%%
+
+function Out = GetFilterParameter(currVal, filterBank, Mel_Fre)
+                               
+    Pre = Mel_Fre(filterBank);
+    Center = Mel_Fre(filterBank + 1);
+    Next = Mel_Fre(filterBank + 2);
+    
+    if ((currVal >=0) && (currVal < Pre))
+        Out = 0; 
+    elseif ((currVal >= Pre)&&(currVal < Center))
+        Out = (currVal - Pre)/(Center- Pre);    
+    elseif ((currVal>=Center)&&(currVal < Next))
+        Out = 1 - (currVal - Center)/(Next - Center);
+    else
+        Out = 0;
+    end    
+    
+end
+
+%%
+function Out = GetCenterFrequency (filterBank,fs, numPointBank)
+    if ((filterBank==0)|(filterBank==1))
+        Out = 0;
+    else
+        % 1125*ln(1 + f/700)
+        tmp = (fs/(2*700)) + 1.0;
+        Mel_Max = 1125.0*log(tmp);
+        
+        % Mel Value
+        Mel_Val = filterBank*Mel_Max/(numPointBank);
+        % 700(e^(m/1125)-1
+        tmp = Mel_Val/1125.0;
+        Out = 700*(exp(tmp)-1);
+        
+    end
+    
+    
+end
+%%
+
+function Out = NormalizationFactor(numFilter,m)
+    if (m==0)
+        Out = sqrt(1/numFilter);
+    else
+        Out = sqrt(2/numFilter);
+    end
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
