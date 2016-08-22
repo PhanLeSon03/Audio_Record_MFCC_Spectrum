@@ -1,11 +1,4 @@
 /*
- * libmfcc.c - Code implementation for libMFCC
- * Copyright (c) 2010 Jeremy Sawruk
- *
- * This code is released under the MIT License. 
- * For conditions of distribution and use, see the license in LICENSE
- */
-/*
  Phan Le Son
  plson03@gmail.com 
  */
@@ -15,82 +8,83 @@
 #include <stdio.h>
 #include <stdlib.h>
  
-float FilterBank[NUMFILTERBANK][NUMBINHALF];
-float fNorm[NUMFILTERBANK];
+float FilterBank[NUMFILTERBANK-1][NUMBINHALF];
+float fNorm[NUMFILTERBANK-1];
 float result[NUMFILTERBANK];
+float FIRCoef[2*NUMBINHALF];
 complex tmpBuff[2*NUMBINHALF];
 
-/* 
- * Computes the specified (mth) MFCC
- *
- * spectralData - array of floats containing the results of FFT computation. This data is already assumed to be purely real
- * samplingRate - the rate that the original time-series data was sampled at (i.e 44100)
- * NumFilters - the number of filters to use in the computation. Recommended value = 48
- * binSize - the size of the spectralData array, usually a power of 2
- * m - The mth MFCC coefficient to compute
- *
- */
 
-/* 
- * Computes the specified (mth) MFCC
- *
- * spectralData - array of floats containing the results of FFT computation. This data is already assumed to be purely real
- * samplingRate - the rate that the original time-series data was sampled at (i.e 44100)
- * NumFilters - the number of filters to use in the computation. Recommended value = 48
- * binSize - the size of the spectralData array, usually a power of 2
- * m - The mth MFCC coefficient to compute
- *
- */
-float GetCoefficient(float* spectralData, unsigned int samplingRate, unsigned int NumFilters, unsigned int binSize, unsigned int m)
+/* precalculation the filterband */
+void PreCalcFilterBank(float Array[NUMFILTERBANK][NUMBINHALF], float fNorm[NUMFILTERBANK], int numBin, int numBand)
 {
-	float result = 0.0f;
-	float outerSum = 0.0f;
-	float innerSum = 0.0f;
-	unsigned int k, l;
+    float currVal;
+    float * Mel_Fre;
+    unsigned int i,j,iBand;
 
-	// 0 <= m < L
-	if(m >= NumFilters)
-	{
-		// This represents an error condition - the specified coefficient is greater than or equal to the number of filters. The behavior in this case is undefined.
-		return 0.0f;
-	}
+    Window(FIRCoef);
 
-	result = NormalizationFactor(NumFilters, m);
+    Mel_Fre =(float *)malloc(sizeof(float)*(numBand+1));
+    Mel_Fre[0] = 0;
+    for (iBand=1; iBand <numBand+1; iBand++)
+    {
+        Mel_Fre[iBand] = GetCenterFrequency(iBand,FS, numBand +1);
+    }
+    
+    for(i=0; i< numBand -1; i++)  //number of Triangle band
+    {
+        for (j=0; j<numBin; j++)
+        {
+            currVal  = (float)(j*FS/(2*NUMBINHALF));
+            Array[i][j]= GetFilterParameter(currVal,i,Mel_Fre);  
+            //printf(" %f ",Array[i][j]);
+        }
+    
+        fNorm[i] = NormalizationFactor(NUMFILTERBANK, i);   
+        //EnergyFac(Array, fNorm );
+        //printf(" %f ",fNorm[i]); 
+    }    
 
-	
-	for(l = 1; l <= NumFilters; l++) //48
-	{
-		// Compute inner sum
-		innerSum = 0.0f;
-		for(k = 0; k < binSize - 1; k++)  //1024
-		{
-			innerSum += fabs(spectralData[k] * GetFilterParameter(samplingRate, binSize, k, l));
-		}
-
-		if(innerSum > 0.0f)
-		{
-			innerSum = log(innerSum); // The log of 0 is undefined, so don't use it
-		}
-
-		innerSum = innerSum * cos(((m * PI) / NumFilters) * (l - 0.5f));
-
-		outerSum += innerSum;
-	}
-
-	result *= outerSum;
-
-	return result;
+    free(Mel_Fre);
 }
 
 
-/* 
- * Computes the Normalization Factor (Equation 6)
- * Used for internal computation only - not to be called directly
- */
+float GetFilterParameter(float currVal, unsigned int filterBand , float * Mel_Fre)
+{
+	float filterParameter = 0.0f;
+
+	
+	float Prev = Mel_Fre[filterBand];
+	float Center = Mel_Fre[filterBand+1];
+	float Next = Mel_Fre[filterBand+2];
+
+    //printf(" %f - %f - %f - %f \n",boundary, prevCenterFrequency, thisCenterFrequency, nextCenterFrequency);
+	if(currVal >= 0 && currVal < Prev)
+	{
+		filterParameter = 0.0f;
+	}
+	else if(currVal >= Prev && currVal < Center)
+	{
+		filterParameter = (currVal - Prev) / (Center - Prev);		
+	}
+	else if(currVal >= Center && currVal < Next)
+	{
+		filterParameter = (currVal - Center) / (Next - Center);		
+	}
+	else 
+	{
+		filterParameter = 0.0f;
+	}
+
+	return filterParameter;
+}
+
+
+
 float NormalizationFactor(int NumFilters, int m)
 {
 	float normalizationFactor = 0.0f;
-
+    
 	if(m == 0)
 	{
 		normalizationFactor = sqrt(1.0f / NumFilters);
@@ -99,96 +93,37 @@ float NormalizationFactor(int NumFilters, int m)
 	{
 		normalizationFactor = sqrt(2.0f / NumFilters);
 	}
-	
+    
 	return normalizationFactor;
 }
 
-/* 
- * Compute the filter parameter for the specified frequency and filter bands (Eq. 2)
- * Used for internal computation only - not the be called directly
- */
-float GetFilterParameter(unsigned int samplingRate, unsigned int binSize, unsigned int frequencyBand, unsigned int filterBand)
+/* Energy factors*/
+void EnergyFac(float FilterBank[NUMFILTERBANK][NUMBINHALF], float fEnergyFac[NUMFILTERBANK])
 {
-	float filterParameter = 0.0f;
+    int i,j;
+    for (i=0; i < NUMFILTERBANK; i++)
+    {
+        fEnergyFac[i] = 0.0;
+        for (j=0; j < NUMBINHALF; j++) 
+        {
+            fEnergyFac[i] += FilterBank[i][j]*FilterBank[i][j];   
+        }
+        
+        fEnergyFac[i] = 1.0/fEnergyFac[i];
+    }
 
-	float boundary = (frequencyBand * samplingRate) / binSize;		        // k * Fs / N
-	float prevCenterFrequency = GetCenterFrequency(filterBand - 1);		// fc(l - 1) etc.
-	float thisCenterFrequency = GetCenterFrequency(filterBand);
-	float nextCenterFrequency = GetCenterFrequency(filterBand + 1);
-
-    //printf(" %f - %f - %f - %f \n",boundary, prevCenterFrequency, thisCenterFrequency, nextCenterFrequency);
-	if(boundary >= 0 && boundary < prevCenterFrequency)
-	{
-		filterParameter = 0.0f;
-	}
-	else if(boundary >= prevCenterFrequency && boundary < thisCenterFrequency)
-	{
-		filterParameter = (boundary - prevCenterFrequency) / (thisCenterFrequency - prevCenterFrequency);
-		//filterParameter *= GetMagnitudeFactor(filterBand);
-	}
-	else if(boundary >= thisCenterFrequency && boundary < nextCenterFrequency)
-	{
-		filterParameter = (boundary - nextCenterFrequency) / (thisCenterFrequency - nextCenterFrequency);
-		//filterParameter *= GetMagnitudeFactor(filterBand);
-	}
-	else if(boundary >= nextCenterFrequency && boundary < samplingRate)
-	{
-		filterParameter = 0.0f;
-	}
-
-	return filterParameter;
 }
 
-/* 
- * Compute the band-dependent magnitude factor for the given filter band (Eq. 3)
- * Used for internal computation only - not the be called directly
- */
-float GetMagnitudeFactor(unsigned int filterBand)
-{
-	float magnitudeFactor = 0.0f;
-	
-	if(filterBand >= 1 && filterBand <= 14)
-	{
-		magnitudeFactor = 0.015;
-	}
-	else if(filterBand >= 15 && filterBand <= 48) //48////////////////////////////////////////////////////////////////////////////
-	{
-		magnitudeFactor = 2.0f / (GetCenterFrequency(filterBand + 1) - GetCenterFrequency(filterBand -1));
-	}
 
-	return magnitudeFactor;
-}
-
-/*
- * Compute the center frequency (fc) of the specified filter band (l) (Eq. 4)
- * This where the mel-frequency scaling occurs. Filters are specified so that their
- * center frequencies are equally spaced on the mel scale
- * Used for internal computation only - not the be called directly
- */
-float GetCenterFrequency(unsigned int filterBand)
+/* http://practicalcryptography.com/miscellaneous/machine-learning/guide-mel-frequency-cepstral-coefficients-mfccs/ */
+float GetCenterFrequency(unsigned int filterBand, int fs, int numPointBank)
 {
 	float centerFrequency = 0.0f;
-	float exponent;
     float tmp;
-#if 1
-	if(filterBand == 0)
-	{
-		centerFrequency = 0;
-	}
-	else if(filterBand >= 1 && filterBand <= 14)
-	{
-		centerFrequency = (200.0f * filterBand) / 3.0f;
-	}
-	else
-	{
-		exponent = filterBand - 14.0f;
-		centerFrequency = pow(1.0711703, exponent);
-		centerFrequency *= 1073.4;
-	}
-#else /* http://practicalcryptography.com/miscellaneous/machine-learning/guide-mel-frequency-cepstral-coefficients-mfccs/ */
+   
     float Mel_Max, Mel_Val=0;
     
-    if(filterBand == 0)
+    if (filterBand == 0)
 	{
 		centerFrequency = 0;
 	}
@@ -196,39 +131,21 @@ float GetCenterFrequency(unsigned int filterBand)
     {
         
         /* 1125*ln(1+f/700) */
-        tmp = (float)(FS/(2.0*700.0)) + 1.0; 
+        tmp = (float)(fs/(2.0*700.0)) + 1.0; 
         Mel_Max = (float)(1125.0*log(tmp));
         //printf("Mel(8000hz): %f ", Mel_Max);
 
         /* Mel value */
-        Mel_Val = filterBand*Mel_Max/(NUMFILTERBANK+1);
+        Mel_Val = filterBand*Mel_Max/(numPointBank);
         /* 700(e^(m/1125)-1) */ 
         tmp = (float)(Mel_Val/1125.0f);
         centerFrequency = 700*(exp(tmp)-1);                
-    }
-    
-#endif
+    }    
        	
 	return centerFrequency;
 }
 
 
-/* precalculation the filterbank */
-void PreCalcFilterBank(float Array[NUMFILTERBANK][NUMBINHALF], float fNorm[NUMFILTERBANK], int numBin, int numBank)
-{
-    int i,j;
-    for(i=0; i< numBank; i++)
-    {
-        for (j=0; j<numBin; j++)
-        {
-            Array[i][j]= GetFilterParameter(FS,2*numBin, j, i+1);     //2*512
-            //printf(" %f ",Array[i][j]);
-        }
-    
-        fNorm[i] = NormalizationFactor(NUMFILTERBANK, i);   
-        //printf(" %f ",fNorm[i]); 
-    }    
-}
 
 /* Mel-Frequency Cepstal Coefficient (MFCC) update 
    Inputs: 
@@ -243,15 +160,22 @@ void PreCalcFilterBank(float Array[NUMFILTERBANK][NUMBINHALF], float fNorm[NUMFI
    Using: "PreCalcFilterBank" function should be called in advance to
    update date Filter[NUMFILTERBANK][NUMBINHALF]
 */
-//void MFCC(float *x, float *y, float Filter[NUMFILTERBANK][NUMBINHALF],float *fNorm, float *Mel)
 void MFCC(complex *Sample, float Filter[NUMFILTERBANK][NUMBINHALF],float *fNorm,float *Mel)
 {
     float spectrum[NUMBINHALF];
 
     int i;
-   
+
+    /* Preemphasis filter*/
+    //Preemphasis(Sample);
+    
     //tmpBuff = (complex *)malloc(sizeof(complex)*2*NUMBINHALF);
 
+    /* Hanning Window */
+    for (i=0; i < 2*NUMBINHALF; i++)
+    {
+         Sample[i].Re = FIRCoef[i]*Sample[i].Re; 
+    }
     /* FFT calculation for input samples */
     fft( Sample, 2*NUMBINHALF, tmpBuff);
 
@@ -276,14 +200,14 @@ void MFCC(complex *Sample, float Filter[NUMFILTERBANK][NUMBINHALF],float *fNorm,
     // Compute coefficients
     GetMFCC(spectrum, Filter,fNorm, Mel); 
   
-
+    //lifter(Mel,NUMFILTERBANK); 
     //free(tmpBuff); 
 }
 
 
 void GetMFCC(float* spectralData,float Filter[NUMFILTERBANK][NUMBINHALF],float *fNorm, float *out)
 {
-    float LogEnergy[NUMFILTERBANK];
+    float LogEnergy[NUMFILTERBANK];    
 	float outerSum = 0.0f;
 	float innerSum = 0.0f;
 	unsigned int k, l, m;
@@ -291,7 +215,7 @@ void GetMFCC(float* spectralData,float Filter[NUMFILTERBANK][NUMBINHALF],float *
     //LogEnergy = (float *)malloc(sizeof(float)*NUMFILTERBANK);
 
 	/* log filterbank energies */
-	for(l = 0; l < NUMFILTERBANK; l++) 
+	for(l = 0; l < NUMFILTERBANK-1; l++) 
 	{
 		LogEnergy[l] = 0.0f;
 		for(k = 0; k < NUMBINHALF ; k++)  
@@ -299,23 +223,23 @@ void GetMFCC(float* spectralData,float Filter[NUMFILTERBANK][NUMBINHALF],float *
 			LogEnergy[l] += fabs(spectralData[k] *  Filter[l][k]);
 		}
 
-		if(LogEnergy[l] > 0.0f)
-		{
-			LogEnergy[l] = log(LogEnergy[l]); // The log of 0 is undefined, so don't use it
-		}
-
+        
+		if(LogEnergy[l] < 0.001f) LogEnergy[l] = 0.01f;
+		
+		LogEnergy[l] = log(LogEnergy[l]); // The log of 0 is undefined, so don't use it
+		
          
     }
 
     /* Discrete Cosine Transform (DCT) */
-    for (m=0; m < NUMFILTERBANK; m++)
+    for (m=0; m < NUMFILTERBANK - 1; m++)
     {
         out[m] = fNorm[m];
          
         outerSum = 0.0f; 
-        for(l = 0; l <  NUMFILTERBANK; l++) 
+        for(l = 0; l <  NUMFILTERBANK-1; l++) 
         {            
-		    innerSum = LogEnergy[l] * cos(((m * PI) / NUMFILTERBANK) * (l + 0.5f));
+		    innerSum = LogEnergy[l] * cos(((m * PI) / (NUMFILTERBANK-1)) * (l + 0.5f));
 
 		    outerSum += innerSum;        
 	    }        
@@ -416,13 +340,28 @@ void ifft( complex *v, int n, complex *tmp )
   return;
 }
 
+void lifter(float * Cepstra, unsigned char Len)
+{
+    int i=0;
+    float Lift;
+    /* L =22 */ 
+    /* Lift = 1 + (L/2)*sin(PI*n/L) */
+    for (i=0; i < Len; i++)
+    {
+        Lift = 1.0f + 32*sin(PI*i/64.0);
+        Cepstra[i] = Lift*Cepstra[i];
+    
+    } 
+    
+
+}
 
 void abs_complex(complex * In, float *Out, int Size)
 {
     int i;
     for (i=0; i < Size; i++)
-    {
-        Out[i] = sqrt(In[i].Re*In[i].Re +In[i].Im*In[i].Im)/(2*Size);    
+    {        
+        Out[i] = sqrt(In[i].Re*In[i].Re +In[i].Im*In[i].Im)/(2*Size);            
     }
 }
 
@@ -509,4 +448,44 @@ short _FFT(short int dir,long m,float *x,float *y)
    
    return 1;
 }
+
+/* Hanning window */
+void Window (float *FIRCoef)
+{
+    int i;
+    for(i=0;i<NUMBINHALF*2;i++)
+    {
+        FIRCoef[i] = (float) NUMBINHALF*2.0f;
+        FIRCoef[i] *= 0.5f*(
+                            1.0f - cos((2.0f*PI*i)/((float)NUMBINHALF*2.0f -1.0f))
+                           );  
+    }
+}
+
+
+void Preemphasis(complex *Data)
+{
+    int i;
+    float fCoef = 0.95f;
+    for(i=1; i < 2*NUMBINHALF ; i++)
+    {
+        Data[i].Re = Data[i].Re -0.95f*Data[i-1].Re; 
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

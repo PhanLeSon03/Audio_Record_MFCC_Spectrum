@@ -9,7 +9,7 @@ int bmp_generator(char *filename, int width, int height, unsigned char *data)
 {
     BITMAPFILEHEADER bmp_head;
     BITMAPINFOHEADER bmp_info;
-    int size = width * height*3 ;
+    int size = width * height * 3;
 
     bmp_head.bfType = 0x4D42; // 'BM'
     bmp_head.bfSize= size + sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER); // 24 + head + info no quad    
@@ -26,7 +26,7 @@ int bmp_generator(char *filename, int width, int height, unsigned char *data)
     bmp_info.biSizeImage = size;
     bmp_info.biXPelsPerMeter = 0;
     bmp_info.biYPelsPerMeter = 0;
-    bmp_info.biClrUsed = 0 ;
+    bmp_info.biClrUsed = 256 ;//256
     bmp_info.biClrImportant = 0;
     // finish the initial of infohead;
 
