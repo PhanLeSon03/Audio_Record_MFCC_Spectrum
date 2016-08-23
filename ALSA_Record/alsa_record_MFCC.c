@@ -25,8 +25,8 @@
 #include "libmfcc.h"
 #include "bmp.h"
 
-#define N 1024
-#define T 64
+
+#define T 78
 
 typedef struct
 {
@@ -46,10 +46,11 @@ typedef struct
 
 
 complex V[2*NUMBINHALF];
-
-extern float FilterBank[NUMFILTERBANK][NUMBINHALF];
-extern float fNorm[NUMFILTERBANK];
-float Re[NUMBINHALF*2], Im[NUMBINHALF*2];
+complex V_Old[2*NUMBINHALF];
+float LastHalf[NUMBINHALF];
+RGB_data BMP[NUMFILTERBANK-1][2*T];
+extern float FilterBank[NUMFILTERBANK-1][NUMBINHALF];
+extern float fNorm[NUMFILTERBANK-1];
 
 
 
@@ -61,8 +62,9 @@ main (int argc, char *argv[])
 {
   // Holds the spectrum data to be analyzed
   float spectrum[NUMBINHALF];
-  float mfcc_result[NUMFILTERBANK];
-  RGB_data BMP[NUMFILTERBANK][T];
+  float mfcc_result[NUMFILTERBANK-1];
+  uint16_t iSample;
+  int16_t temp_s16;
  
   float Min=0.0f,Max=0.0f;
   int Val_RGB;
@@ -200,42 +202,67 @@ main (int argc, char *argv[])
           exit (1);
       }
       fprintf(stdout, "read %d done\n", i);
-      uint16_t iSample;
-      short temp;
+
       for (iSample=0; iSample < 2*buffer_frames*Channel; iSample++)
       {
           if (iSample%(2*Channel)==0)
           {  
-              buffer_mic1[iSample/(Channel)]=buffer[iSample];
-              buffer_mic1[iSample/(Channel)+1]=buffer[iSample+1];  
-              temp = (short)(buffer[iSample+1]| (buffer[iSample]<<8));
-              V[iSample/(2*Channel)].Re = (float)(temp/32768.0); 
+              buffer_mic1[iSample/Channel]=buffer[iSample];
+              buffer_mic1[iSample/Channel+1]=buffer[iSample+1];  
+              //temp_s16 = (short)((short)(buffer_mic1[iSample/(Channel)+1])|(short)(buffer_mic1[iSample/(Channel)]<<8));
+              temp_s16 = (int16_t)(buffer_mic1[iSample/Channel+1]*256);   
+              temp_s16 += buffer_mic1[iSample/Channel];
+  
+              if ((iSample/(2*Channel)) < NUMBINHALF)  
+              {
+                  V_Old[iSample/(2*Channel)].Re = LastHalf[iSample/(2*Channel)]; 
+                  V_Old[iSample/(2*Channel)+NUMBINHALF].Re = (float)(temp_s16);                    
+              }
+              else
+              {
+                   LastHalf[iSample/(2*Channel) -NUMBINHALF] = (float)(temp_s16);
+              } 
+             
+              V[iSample/(2*Channel)].Re = (float)(temp_s16); 
+
               V[iSample/(2*Channel)].Im = (float)0.0f;
-              //V[iSample/(2*Channel)].Re = (float)cos(2*PI*1000*iSample/(2*Channel)/FS);//(float)cos(2*PI*1000*iSample/(2*Channel)/FS);//+ 
-              //V[iSample/(2*Channel)].Im = (float)0.0f; 
-              //Re[iSample/(Channel*2)] = (float)(buffer[iSample+1]| (buffer[iSample]<<8)); 
-              //Im[iSample/(Channel*2)] = 0.0f;
+              V_Old[iSample/(2*Channel)].Im = (float)0.0f;
           }
       }
       
       fwrite(buffer_mic1,1,2*buffer_frames,out);
       
       
-      MFCC(V, FilterBank ,fNorm, mfcc_result);
-	  
+      MFCC(V_Old, FilterBank ,fNorm, mfcc_result);
       printf("MFCC:");
-      for(idxCoeff = 2; idxCoeff < NUMFILTERBANK; idxCoeff++)
-	  {	     
-	      //printf(" %f ", mfcc_result[idxCoeff]);
-          Val_RGB = (int)(50*(mfcc_result[idxCoeff]+1.5));
+      for(idxCoeff = 0; idxCoeff < NUMFILTERBANK-1; idxCoeff++)
+	  {	               
+          Val_RGB = (int)(255*(mfcc_result[idxCoeff])); 
           if (Val_RGB < 0)  Val_RGB = 0;
-           
-          BMP[idxCoeff][i].g =  (BYTE)(Val_RGB );
-          BMP[idxCoeff][i].b =  (BYTE)(Val_RGB);
-          BMP[idxCoeff][i].r =  (BYTE)(Val_RGB ); 
-          //BMP[idxCoeff][i].g = (BYTE)((Val_RGB & 0x00FF00)>>8);
-          //BMP[idxCoeff][i].b = (BYTE)((Val_RGB & 0xFF0000)>>16); 
-          printf(" %d  ", Val_RGB); 
+          if (Val_RGB > 255)  Val_RGB = 255;
+
+          BMP[NUMFILTERBANK - idxCoeff-2][2*i].g =  (BYTE)(Val_RGB); 
+          BMP[NUMFILTERBANK - idxCoeff-2][2*i].r =  (BYTE)(Val_RGB);
+          BMP[NUMFILTERBANK - idxCoeff-2][2*i].b =  (BYTE)(Val_RGB);  
+          printf(" %f  ", mfcc_result[idxCoeff]); 
+          if (mfcc_result[idxCoeff] < Min) Min=mfcc_result[idxCoeff];
+          if (mfcc_result[idxCoeff] > Max) Max=mfcc_result[idxCoeff];  
+	  }
+      printf("\n");
+
+      MFCC(V, FilterBank ,fNorm, mfcc_result);	  
+      printf("MFCC:");
+      for(idxCoeff = 0; idxCoeff < NUMFILTERBANK-1; idxCoeff++)
+	  {	               
+          Val_RGB = (int)(255*(mfcc_result[idxCoeff])); 
+          if (Val_RGB < 0)  Val_RGB = 0;
+          if (Val_RGB > 255)  Val_RGB = 255;
+
+          BMP[NUMFILTERBANK - idxCoeff-2][2*i+1].g =  (BYTE)(Val_RGB); 
+          BMP[NUMFILTERBANK - idxCoeff-2][2*i+1].r =  (BYTE)(Val_RGB);
+          BMP[NUMFILTERBANK - idxCoeff-2][2*i+1].b =  (BYTE)(Val_RGB);  
+
+          printf(" %f  ", mfcc_result[idxCoeff]);
           if (mfcc_result[idxCoeff] < Min) Min=mfcc_result[idxCoeff];
           if (mfcc_result[idxCoeff] > Max) Max=mfcc_result[idxCoeff];  
 	  }
@@ -256,7 +283,7 @@ main (int argc, char *argv[])
   fprintf(stdout, "audio interface closed\n");
 
   
-  bmp_generator("./record.bmp",T, NUMFILTERBANK , (BYTE*)BMP); 
+  bmp_generator("./record.bmp",2*T, NUMFILTERBANK -1 , (BYTE*)(BMP)); 
   exit (0);
 }
 

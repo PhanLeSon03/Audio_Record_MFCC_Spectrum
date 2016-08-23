@@ -39,6 +39,7 @@ void PreCalcFilterBank(float Array[NUMFILTERBANK][NUMBINHALF], float fNorm[NUMFI
             Array[i][j]= GetFilterParameter(currVal,i,Mel_Fre);  
             //printf(" %f ",Array[i][j]);
         }
+        //printf("\r\n");
     
         fNorm[i] = NormalizationFactor(NUMFILTERBANK, i);   
         //EnergyFac(Array, fNorm );
@@ -69,7 +70,7 @@ float GetFilterParameter(float currVal, unsigned int filterBand , float * Mel_Fr
 	}
 	else if(currVal >= Center && currVal < Next)
 	{
-		filterParameter = (currVal - Center) / (Next - Center);		
+		filterParameter = 1.0f - (currVal - Center) / (Next - Center);		
 	}
 	else 
 	{
@@ -136,7 +137,7 @@ float GetCenterFrequency(unsigned int filterBand, int fs, int numPointBank)
         //printf("Mel(8000hz): %f ", Mel_Max);
 
         /* Mel value */
-        Mel_Val = filterBand*Mel_Max/(numPointBank);
+        Mel_Val = (filterBand+1)*Mel_Max/(numPointBank);
         /* 700(e^(m/1125)-1) */ 
         tmp = (float)(Mel_Val/1125.0f);
         centerFrequency = 700*(exp(tmp)-1);                
@@ -224,7 +225,7 @@ void GetMFCC(float* spectralData,float Filter[NUMFILTERBANK][NUMBINHALF],float *
 		}
 
         
-		if(LogEnergy[l] < 0.001f) LogEnergy[l] = 0.01f;
+		if(LogEnergy[l] < 0.001f) LogEnergy[l] = 0.001f;
 		
 		LogEnergy[l] = log(LogEnergy[l]); // The log of 0 is undefined, so don't use it
 		
