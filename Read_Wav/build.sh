@@ -1,2 +1,2 @@
 sudo gcc wav_read.c bmp.c libmfcc.c -lm 
-sudo ./a.out 
+./a.out record_2.wav 
